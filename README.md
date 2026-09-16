@@ -27,15 +27,22 @@ Then it mixes one single layer of gentle room tone under the whole file, so the 
 Run on real narration — ten separate takes concatenated, 8 minutes 47 seconds:
 
 ```
-loudness spread      2.04  ->  0.07 LU
-noise floor spread  39.4   ->  2.0  dB
-worst tonal band    12.5   ->  2.1  dB
-output              -16.07 LUFS, peak -1.22 dBFS
-processing          49 s for 527 s of audio   (10.8x realtime)
+loudness spread      2.04  ->  0.03 LU
+noise floor spread  39.4   ->  2.2  dB
+worst tonal band    13.5   ->  0.9  dB
+output              -16.1 LUFS, peak -1.2 dBFS
+processing          28 s for 527 s of audio   (~19x realtime)
 samples in / out    23,238,936 / 23,238,936   (exact)
 ```
 
 That 39 dB noise-floor spread is what "different rooms, different mics" sounds like. Two decibels is what one room sounds like.
+
+And because "no length cap" has to mean something:
+
+```
+44-minute file    14/14 checks    106 s    start-vs-end drift 0.18 dB
+79-minute file    14/14 checks    196 s    start-vs-end drift 0.12 dB
+```
 
 ## Why browser-only matters
 
@@ -78,7 +85,7 @@ Built for **Build It With AI**, Episode 2.
 
 ITU-R BS.1770 loudness (K-weighting, 400 ms blocks, 75% overlap, absolute and relative gating), noise floor as the 1st percentile of 100 ms RMS windows, 7-band FFT tonal profile, an envelope-follower expander solved against an absolute floor target, iterative spectral matching, compressor and look-ahead limiter.
 
-29 automated checks across four suites — DSP core, page, single-file build, and a real 8:47 recording — every one run with all network requests blocked and counted, because a tool that claims to work offline should be tested that way rather than described that way.
+62 automated checks across six suites — DSP core, page, single-file build, edge cases, a real 8:47 recording, and 44- and 79-minute files — every one run with all network requests blocked and counted, because a tool that claims to work offline should be tested that way rather than described that way.
 
 The release download includes `test_fixture.wav`, an 80-second file with four deliberately mismatched sections. Run it through and watch the spread columns collapse.
 
