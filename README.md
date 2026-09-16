@@ -2,7 +2,7 @@
 
 **A voice cleanup and levelling tool that runs entirely in your browser. No upload, no account, no length cap.**
 
-👉 **[Open it](https://GITHUB-USERNAME.github.io/voice-leveler/)** — or download `index.html` and double-click it.
+👉 **[Open it](https://JonathanGeorgeGatz.github.io/voice-leveler/)** — or download `index.html` and double-click it.
 
 ---
 
