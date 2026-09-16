@@ -1,0 +1,636 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Voice Leveler</title>
+<style>
+:root{--bg:#0F1216;--panel:#171C22;--line:#242C35;--ink:#E7ECF2;--dim:#8C99A8;
+      --accent:#4FD1A5;--warn:#E9B44C;--bad:#E8705F}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,"Segoe UI",Inter,Helvetica,Arial,sans-serif}
+.wrap{max-width:1080px;margin:0 auto;padding:34px 26px 80px}
+header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+h1{font-size:27px;letter-spacing:-.01em}
+.badge{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);
+  border:1px solid var(--accent);border-radius:999px;padding:3px 10px}
+.sub{color:var(--dim);margin-bottom:26px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:18px}
+#drop{border:2px dashed var(--line);border-radius:14px;padding:44px 22px;text-align:center;cursor:pointer;transition:.15s}
+#drop:hover,#drop.over{border-color:var(--accent);background:#141A20}
+#drop h2{font-size:19px;margin-bottom:6px;font-weight:600}
+#drop p{color:var(--dim);font-size:14px}
+.hide{display:none!important}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(186px,1fr));gap:14px}
+.ctl label{display:block;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin-bottom:7px}
+select,input[type=range]{width:100%}
+select{background:#0E1317;color:var(--ink);border:1px solid var(--line);border-radius:9px;padding:9px 10px;font-size:14px}
+.val{float:right;color:var(--accent);font-variant-numeric:tabular-nums}
+button{font:inherit;font-weight:600;border:0;border-radius:11px;padding:13px 22px;cursor:pointer}
+.primary{background:var(--accent);color:#06231A}
+.primary:disabled{opacity:.45;cursor:not-allowed}
+.ghost{background:#20272F;color:var(--ink);border:1px solid var(--line)}
+.row{display:flex;gap:11px;flex-wrap:wrap;align-items:center}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:14px}
+th{text-align:left;font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);padding:0 9px 9px;font-weight:600}
+td{padding:8px 9px;border-top:1px solid var(--line)}
+.ok{color:var(--accent)}.mid{color:var(--warn)}.bad{color:var(--bad)}
+.verdict{display:flex;gap:26px;flex-wrap:wrap;margin-top:16px}
+.vi{flex:1;min-width:150px}
+.vl{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim)}
+.vv{font-size:27px;margin-top:3px;font-variant-numeric:tabular-nums}
+.arrow{color:var(--dim);font-size:19px}
+#bar{height:5px;background:var(--line);border-radius:4px;overflow:hidden;margin-top:14px}
+#barfill{height:100%;width:0;background:var(--accent);transition:width .2s}
+#status{color:var(--dim);font-size:13.5px;margin-top:9px;min-height:19px}
+.note{color:var(--dim);font-size:13px;margin-top:13px;line-height:1.6}
+audio{width:100%;margin-top:9px}
+.cmp{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:700px){.cmp{grid-template-columns:1fr}}
+h3{font-size:15px;margin-bottom:11px}
+</style></head><body>
+<div class="wrap">
+  <header>
+    <h1>Voice Leveler</h1>
+    <span class="badge">runs on your computer</span>
+    <span class="badge">no length limit</span>
+  </header>
+  <p class="sub">Cleans up a voice recording and makes every section of it sound like the same room — even a three-hour one.</p>
+
+  <div id="drop" class="panel">
+    <h2>Drop an audio or video file here</h2>
+    <p>or click to choose &nbsp;·&nbsp; mp3, wav, m4a, mp4, mov &nbsp;·&nbsp; nothing is uploaded anywhere</p>
+    <input id="file" type="file" accept="audio/*,video/*" class="hide">
+  </div>
+
+  <div id="work" class="hide">
+    <div class="panel">
+      <h3 id="fname">—</h3>
+      <div class="grid">
+        <div class="ctl"><label>Target loudness <span class="val" id="lufsv">-16 LUFS</span></label>
+          <select id="lufs">
+            <option value="-16" selected>Podcast / voiceover (-16)</option>
+            <option value="-14">YouTube (-14)</option>
+            <option value="-19">Broadcast (-19)</option>
+            <option value="-23">EBU R128 (-23)</option>
+          </select></div>
+        <div class="ctl"><label>Cleanup strength <span class="val" id="strv">0.75</span></label>
+          <input id="str" type="range" min="0" max="1" step="0.05" value="0.75"></div>
+        <div class="ctl"><label>Section length <span class="val" id="secv">30s</span></label>
+          <input id="sec" type="range" min="10" max="120" step="5" value="30"></div>
+        <div class="ctl"><label>Match sections to each other</label>
+          <select id="match"><option value="1" selected>Yes — same room throughout</option>
+            <option value="0">No — clean up only</option></select></div>
+      </div>
+      <div class="row" style="margin-top:18px">
+        <button id="go" class="primary">Analyse and enhance</button>
+        <button id="reset" class="ghost">Start over</button>
+      </div>
+      <div id="bar"><div id="barfill"></div></div>
+      <div id="status"></div>
+    </div>
+
+    <div id="results" class="panel hide">
+      <h3>What changed</h3>
+      <div class="verdict" id="verdict"></div>
+      <div style="overflow-x:auto;margin-top:22px">
+        <table id="tbl"><thead><tr><th>Section</th><th>Loudness before</th><th>after</th>
+          <th>Background before</th><th>after</th></tr></thead><tbody></tbody></table>
+      </div>
+      <p class="note" id="explain"></p>
+    </div>
+
+    <div id="listen" class="panel hide">
+      <h3>Listen</h3>
+      <div class="cmp">
+        <div><div class="vl">Before</div><audio id="a0" controls></audio></div>
+        <div><div class="vl">After</div><audio id="a1" controls></audio></div>
+      </div>
+      <div class="row" style="margin-top:18px">
+        <button id="dl" class="primary">Download the enhanced WAV</button>
+      </div>
+      <p class="note">Drop the WAV back onto your timeline in place of the original audio. It is the same length, so nothing shifts.</p>
+    </div>
+  </div>
+</div>
+<script>
+/* Voice Leveler — DSP core.
+   Plain functions over Float32Array. No dependencies, no network.
+   Exposed on window.VL so the test suite and the UI use the exact same code. */
+(function (global) {
+"use strict";
+
+/* ---------- biquads ---------- */
+function biquad(b0, b1, b2, a1, a2) {
+  return function (x) {
+    var y = new Float32Array(x.length), z1 = 0, z2 = 0;
+    for (var i = 0; i < x.length; i++) {
+      var w = x[i] - a1 * z1 - a2 * z2;
+      y[i] = b0 * w + b1 * z1 + b2 * z2;
+      z2 = z1; z1 = w;
+    }
+    return y;
+  };
+}
+function highpass(fc, sr, q) {
+  q = q || 0.707;
+  var w = 2 * Math.PI * fc / sr, c = Math.cos(w), s = Math.sin(w), al = s / (2 * q);
+  var a0 = 1 + al;
+  return biquad((1 + c) / 2 / a0, -(1 + c) / a0, (1 + c) / 2 / a0, (-2 * c) / a0, (1 - al) / a0);
+}
+function peaking(fc, sr, q, gainDb) {
+  var A = Math.pow(10, gainDb / 40), w = 2 * Math.PI * fc / sr;
+  var c = Math.cos(w), s = Math.sin(w), al = s / (2 * q), a0 = 1 + al / A;
+  return biquad((1 + al * A) / a0, (-2 * c) / a0, (1 - al * A) / a0, (-2 * c) / a0, (1 - al / A) / a0);
+}
+function highShelf(fc, sr, gainDb) {
+  var A = Math.pow(10, gainDb / 40), w = 2 * Math.PI * fc / sr;
+  var c = Math.cos(w), s = Math.sin(w), al = s / 2 * Math.sqrt((A + 1 / A) * (1 / 0.707 - 1) + 2);
+  var sq = 2 * Math.sqrt(A) * al, a0 = (A + 1) - (A - 1) * c + sq;
+  return biquad(
+    A * ((A + 1) + (A - 1) * c + sq) / a0,
+    -2 * A * ((A - 1) + (A + 1) * c) / a0,
+    A * ((A + 1) + (A - 1) * c - sq) / a0,
+    2 * ((A - 1) - (A + 1) * c) / a0,
+    ((A + 1) - (A - 1) * c - sq) / a0
+  );
+}
+
+/* ---------- measurement ---------- */
+function rmsDb(x, from, to) {
+  var s = 0, n = 0;
+  for (var i = from; i < to && i < x.length; i++) { s += x[i] * x[i]; n++; }
+  return n ? 10 * Math.log10(s / n + 1e-20) : -120;
+}
+/** True noise floor: 1st percentile of 100 ms RMS windows.
+ *  A longer window measures quiet speech instead of the floor. */
+function noiseFloorDb(x, sr) {
+  var w = Math.max(1, Math.round(0.1 * sr)), vals = [];
+  for (var i = 0; i + w < x.length; i += w >> 1) vals.push(rmsDb(x, i, i + w));
+  if (!vals.length) return -120;
+  vals.sort(function (a, b) { return a - b; });
+  return vals[Math.floor(vals.length * 0.01)];
+}
+/** Integrated loudness, ITU-R BS.1770 style: K-weighting + -10 LU relative gate. */
+function lufs(x, sr) {
+  var k = highShelf(1500, sr, 4)(highpass(38, sr, 0.5)(x));
+  var w = Math.max(1, Math.round(0.4 * sr)), hop = w >> 2, blocks = [];
+  for (var i = 0; i + w < k.length; i += hop) {
+    var s = 0;
+    for (var j = i; j < i + w; j++) s += k[j] * k[j];
+    blocks.push(-0.691 + 10 * Math.log10(s / w + 1e-20));
+  }
+  if (!blocks.length) return -70;
+  var abs = blocks.filter(function (b) { return b > -70; });
+  if (!abs.length) return -70;
+  var mean = function (a) {
+    var t = 0; for (var i = 0; i < a.length; i++) t += Math.pow(10, a[i] / 10);
+    return 10 * Math.log10(t / a.length);
+  };
+  var gate = mean(abs) - 10;
+  var kept = abs.filter(function (b) { return b > gate; });
+  return kept.length ? mean(kept) : mean(abs);
+}
+function peakDb(x) {
+  var p = 0;
+  for (var i = 0; i < x.length; i++) { var a = Math.abs(x[i]); if (a > p) p = a; }
+  return 20 * Math.log10(p + 1e-20);
+}
+/** Average energy in frequency bands, via a coarse Goertzel-free FFT. */
+var BANDS = [[80, 200], [200, 500], [500, 1200], [1200, 3000], [3000, 6000], [6000, 10000], [10000, 16000]];
+function fftMag(re, im) {
+  var n = re.length;
+  for (var i = 1, j = 0; i < n; i++) {
+    var bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) { var t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; }
+  }
+  for (var len = 2; len <= n; len <<= 1) {
+    var ang = -2 * Math.PI / len, wr = Math.cos(ang), wi = Math.sin(ang);
+    for (var s = 0; s < n; s += len) {
+      var cr = 1, ci = 0;
+      for (var q = 0; q < len / 2; q++) {
+        var ur = re[s + q], ui = im[s + q];
+        var vr = re[s + q + len / 2] * cr - im[s + q + len / 2] * ci;
+        var vi = re[s + q + len / 2] * ci + im[s + q + len / 2] * cr;
+        re[s + q] = ur + vr; im[s + q] = ui + vi;
+        re[s + q + len / 2] = ur - vr; im[s + q + len / 2] = ui - vi;
+        var ncr = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = ncr;
+      }
+    }
+  }
+}
+function bandProfile(x, sr) {
+  var N = 4096, win = new Float32Array(N), acc = new Float64Array(N / 2 + 1), frames = 0;
+  for (var i = 0; i < N; i++) win[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (N - 1));
+  var step = Math.max(N, Math.floor((x.length - N) / 120));
+  for (var s = 0; s + N < x.length; s += step) {
+    var re = new Float64Array(N), im = new Float64Array(N);
+    for (var k = 0; k < N; k++) re[k] = x[s + k] * win[k];
+    fftMag(re, im);
+    for (var b = 0; b <= N / 2; b++) acc[b] += re[b] * re[b] + im[b] * im[b];
+    frames++;
+  }
+  if (!frames) return BANDS.map(function () { return -120; });
+  return BANDS.map(function (bd) {
+    var lo = Math.floor(bd[0] * N / sr), hi = Math.min(N / 2, Math.ceil(bd[1] * N / sr)), t = 0, c = 0;
+    for (var b = lo; b <= hi; b++) { t += acc[b] / frames; c++; }
+    return 10 * Math.log10(t / Math.max(c, 1) + 1e-20);
+  });
+}
+
+/* ---------- processors ---------- */
+/** Downward expander. Pushes everything under the threshold further down,
+ *  which is what actually removes room noise and breath. Denoisers barely
+ *  move a breath-dominated floor; this does. */
+function expander(x, sr, thrDb, ratio, atkMs, relMs) {
+  var y = new Float32Array(x.length);
+  var atk = Math.exp(-1 / (sr * atkMs / 1000)), rel = Math.exp(-1 / (sr * relMs / 1000));
+  var env = 0, thr = Math.pow(10, thrDb / 20);
+  for (var i = 0; i < x.length; i++) {
+    var a = Math.abs(x[i]);
+    env = a > env ? atk * env + (1 - atk) * a : rel * env + (1 - rel) * a;
+    var g = 1;
+    if (env < thr) {
+      var under = 20 * Math.log10((env + 1e-12) / thr);      // negative
+      g = Math.pow(10, (under * (ratio - 1)) / 20);
+      if (g < 1e-4) g = 1e-4;
+    }
+    y[i] = x[i] * g;
+  }
+  return y;
+}
+function compressor(x, sr, thrDb, ratio, atkMs, relMs, makeupDb) {
+  var y = new Float32Array(x.length);
+  var atk = Math.exp(-1 / (sr * atkMs / 1000)), rel = Math.exp(-1 / (sr * relMs / 1000));
+  var env = 0, thr = Math.pow(10, thrDb / 20), mk = Math.pow(10, makeupDb / 20);
+  for (var i = 0; i < x.length; i++) {
+    var a = Math.abs(x[i]);
+    env = a > env ? atk * env + (1 - atk) * a : rel * env + (1 - rel) * a;
+    var g = 1;
+    if (env > thr) {
+      var over = 20 * Math.log10(env / thr);
+      g = Math.pow(10, (-over * (1 - 1 / ratio)) / 20);
+    }
+    y[i] = x[i] * g * mk;
+  }
+  return y;
+}
+/** De-esser: split off the sibilance band, duck the whole signal when it spikes. */
+function deesser(x, sr, amount) {
+  if (amount <= 0) return x;
+  var hf = peaking(7000, sr, 1.2, 12)(x);
+  var y = new Float32Array(x.length);
+  var atk = Math.exp(-1 / (sr * 0.001)), rel = Math.exp(-1 / (sr * 0.06));
+  var env = 0, wide = 0;
+  for (var i = 0; i < x.length; i++) {
+    var a = Math.abs(hf[i]), b = Math.abs(x[i]);
+    env = a > env ? atk * env + (1 - atk) * a : rel * env + (1 - rel) * a;
+    wide = rel * wide + (1 - rel) * b;
+    var ratio = env / (wide + 1e-9);
+    var g = ratio > 1.1 ? Math.pow(1.1 / ratio, amount) : 1;
+    y[i] = x[i] * g;
+  }
+  return y;
+}
+function limiter(x, sr, ceilDb) {
+  var ceil = Math.pow(10, ceilDb / 20), look = Math.round(sr * 0.002);
+  var y = new Float32Array(x.length), env = 1;
+  var rel = Math.exp(-1 / (sr * 0.012));   // quick recovery: a slow release here
+  for (var i = 0; i < x.length; i++) {      // quietly eats overall loudness
+    var ahead = 0;
+    for (var j = i; j < i + look && j < x.length; j++) {
+      var a = Math.abs(x[j]); if (a > ahead) ahead = a;
+    }
+    var need = ahead > ceil ? ceil / ahead : 1;
+    env = need < env ? need : rel * env + (1 - rel) * need;
+    y[i] = x[i] * Math.min(env, 1);
+  }
+  return y;
+}
+function gain(x, db) {
+  var g = Math.pow(10, db / 20), y = new Float32Array(x.length);
+  for (var i = 0; i < x.length; i++) y[i] = x[i] * g;
+  return y;
+}
+
+/* ---------- section matching — the part no one-click enhancer does ---------- */
+function sections(len, sr, targetSec) {
+  var n = Math.max(1, Math.round(len / sr / targetSec)), out = [], step = Math.floor(len / n);
+  for (var i = 0; i < n; i++) out.push([i * step, i === n - 1 ? len : (i + 1) * step]);
+  return out;
+}
+function analyseSections(x, sr, targetSec) {
+  return sections(x.length, sr, targetSec || 30).map(function (r) {
+    var seg = x.subarray(r[0], r[1]);
+    return { from: r[0], to: r[1], lufs: lufs(seg, sr), floor: noiseFloorDb(seg, sr), bands: bandProfile(seg, sr) };
+  });
+}
+/** Bring every section to the same loudness and the same tonal balance, so a
+ *  file recorded across several takes stops sounding like several rooms. */
+function matchSections(x, sr, opts) {
+  opts = opts || {};
+  var targetSec = opts.sectionSec || 30, iters = opts.iterations || 5;
+  var work = x;
+  var centers = [126, 316, 775, 1900, 4243, 7746, 12649];
+  var report = [];
+  for (var it = 0; it < iters; it++) {
+    var S = analyseSections(work, sr, targetSec);
+    if (S.length < 2) break;
+    var refL = S.reduce(function (a, s) { return a + s.lufs; }, 0) / S.length;
+    var refB = centers.map(function (_, bi) {
+      return S.reduce(function (a, s) { return a + s.bands[bi]; }, 0) / S.length;
+    });
+    var spreadB = 0;
+    for (var bi = 0; bi < centers.length; bi++) {
+      var v = S.map(function (s) { return s.bands[bi]; });
+      spreadB = Math.max(spreadB, Math.max.apply(null, v) - Math.min.apply(null, v));
+    }
+    var lv = S.map(function (s) { return s.lufs; });
+    report.push({ iteration: it, loudnessSpread: Math.max.apply(null, lv) - Math.min.apply(null, lv), bandSpread: spreadB });
+    var out = new Float32Array(work.length);
+    S.forEach(function (s) {
+      var seg = Float32Array.prototype.slice.call(work, s.from, s.to);
+      for (var bi = 0; bi < centers.length; bi++) {
+        var d = refB[bi] - s.bands[bi];
+        if (d > 9) d = 9; if (d < -9) d = -9;
+        if (Math.abs(d) > 0.15) seg = peaking(centers[bi], sr, 1.1, d)(seg);
+      }
+      seg = gain(seg, refL - lufs(seg, sr));
+      out.set(seg, s.from);
+    });
+    work = out;
+  }
+  return { audio: work, report: report, final: analyseSections(work, sr, targetSec) };
+}
+
+/* ---------- the whole chain ---------- */
+function enhance(x, sr, o) {
+  o = o || {};
+  var strength = o.strength == null ? 0.7 : o.strength;   // 0..1
+  var targetLufs = o.targetLufs == null ? -16 : o.targetLufs;
+  var ceil = o.ceilingDb == null ? -1.5 : o.ceilingDb;
+  var log = {};
+
+  log.inputLufs = lufs(x, sr);
+  log.inputFloor = noiseFloorDb(x, sr);
+  log.inputPeak = peakDb(x);
+
+  var y = highpass(o.highpassHz || 75, sr)(x);
+
+  // Normalise level FIRST. Expanding before the makeup gain is pointless — the
+  // gain just lifts the floor back up by however much it raised the voice.
+  y = gain(y, targetLufs - lufs(y, sr));
+
+  // Expand PER SECTION toward one absolute floor, so sections recorded apart
+  // end up with the same background instead of merely quieter backgrounds.
+  var secSec = o.sectionSec || 30;
+  var ranges = sections(y.length, sr, secSec);
+  var expanded = new Float32Array(y.length);
+  log.sectionFloorsIn = [];
+  ranges.forEach(function (r) {
+    var seg = Float32Array.prototype.slice.call(y, r[0], r[1]);
+    var f = noiseFloorDb(seg, sr);
+    log.sectionFloorsIn.push(f);
+    // Solve the ratio that lands THIS section's floor on the same absolute
+    // target as every other section. Expanding each one by the same relative
+    // amount keeps them as far apart as they started.
+    var T = -25, TARGET = o.floorTargetDb == null ? -58 : o.floorTargetDb;
+    for (var p = 0; p < 3; p++) {
+      var cur = p === 0 ? f : noiseFloorDb(seg, sr);
+      if (cur <= TARGET + 1) break;
+      var denom = cur - T;
+      if (denom >= -0.5) denom = -0.5;                 // floor sits above the knee
+      var ratio = 1 + ((TARGET - cur) / denom) * strength;
+      if (ratio < 1) ratio = 1; if (ratio > 9) ratio = 9;
+      seg = expander(seg, sr, T, ratio, 3, 55);
+    }
+    expanded.set(seg, r[0]);
+  });
+  y = expanded;
+  log.afterExpanderFloor = noiseFloorDb(y, sr);
+
+  y = peaking(300, sr, 1.2, -1.4 * strength)(y);          // clear the mud
+  y = peaking(5200, sr, 1.6, 1.8 * strength)(y);          // presence
+  y = highShelf(11000, sr, 1.4 * strength)(y);            // air
+  y = deesser(y, sr, 0.6 * strength);
+
+  if (o.matchSections !== false) {
+    var m = matchSections(y, sr, { sectionSec: o.sectionSec || 30, iterations: o.iterations || 5 });
+    y = m.audio; log.match = m.report; log.sections = m.final.length;
+  }
+
+  y = compressor(y, sr, -20, 2.4, 12, 180, 0);
+
+  // Compression lifts the background again, so re-flatten the floors here,
+  // after the last thing that could move them.
+  var TGT2 = o.floorTargetDb == null ? -58 : o.floorTargetDb;
+  var fixed = new Float32Array(y.length);
+  sections(y.length, sr, secSec).forEach(function (r) {
+    var seg = Float32Array.prototype.slice.call(y, r[0], r[1]);
+    for (var p2 = 0; p2 < 2; p2++) {
+      var cur = noiseFloorDb(seg, sr);
+      if (cur <= TGT2 + 1) break;
+      var den = cur - (-25); if (den >= -0.5) den = -0.5;
+      var rt = 1 + ((TGT2 - cur) / den);
+      if (rt < 1) rt = 1; if (rt > 9) rt = 9;
+      seg = expander(seg, sr, -25, rt, 3, 55);
+    }
+    fixed.set(seg, r[0]);
+  });
+  y = fixed;
+
+  // Match once more, after compression and the floor fix. Anything that touches
+  // level or dynamics re-colours the sections slightly, so the last word on
+  // tone has to come after the last thing that can change it.
+  if (o.matchSections !== false) {
+    var m2 = matchSections(y, sr, { sectionSec: secSec, iterations: 3 });
+    y = m2.audio; log.match2 = m2.report;
+  }
+
+  // Aim, limit, re-measure, correct. Limiting pulls loudness down, so a single
+  // gain-then-limit lands short of the target every time.
+  y = limiter(gain(y, targetLufs - lufs(y, sr)), sr, ceil);
+  for (var pass = 0; pass < 6; pass++) {
+    var err = targetLufs - lufs(y, sr);
+    if (Math.abs(err) < 0.15) break;
+    y = limiter(gain(y, err), sr, ceil);
+  }
+
+  // Level is the last thing to settle: the limiter nudges sections apart again,
+  // so flatten them one final time with gain only (no EQ — tone is already set).
+  if (o.matchSections !== false) {
+    var fin = new Float32Array(y.length), rs = sections(y.length, sr, secSec);
+    var ls = rs.map(function (r) { return lufs(y.subarray(r[0], r[1]), sr); });
+    var refFin = ls.reduce(function (a, v) { return a + v; }, 0) / ls.length;
+    rs.forEach(function (r, i) {
+      fin.set(gain(Float32Array.prototype.slice.call(y, r[0], r[1]), refFin - ls[i]), r[0]);
+    });
+    y = limiter(fin, sr, ceil);
+    log.finalSectionLoudness = ls;
+  }
+
+  // one consistent room tone so the floor never changes between sections
+  if (o.roomTone !== false) {
+    // Sit the tone just above the WORST section's residual floor. A fixed level
+    // either fails to mask the noisy sections or adds needless hiss to the clean
+    // ones; this lands every section on the same audible background.
+    var resid = sections(y.length, sr, secSec).map(function (r) {
+      return noiseFloorDb(y.subarray(r[0], r[1]), sr);
+    });
+    var worst = Math.max.apply(null, resid);
+    var toneDb = o.roomToneDb == null ? Math.min(worst + 3.5, -40) : o.roomToneDb;
+    log.roomToneDb = toneDb;
+    log.residualFloors = resid;
+    // uniform noise RMS = 1/sqrt(3); the one-pole lowpass scales RMS by
+    // (1-a)/sqrt(1-a^2). Without dividing that out the tone lands ~16 dB
+    // under the level asked for, and masks nothing.
+    var a = 0.86, rmsScale = (1 - a) / Math.sqrt(1 - a * a) * (1 / Math.sqrt(3));
+    var amp = Math.pow(10, toneDb / 20) / rmsScale;
+    var lp = 0;
+    for (var i = 0; i < y.length; i++) {
+      lp = lp * a + (Math.random() * 2 - 1) * (1 - a);
+      y[i] += lp * amp;
+    }
+  }
+
+  log.outputLufs = lufs(y, sr);
+  log.outputFloor = noiseFloorDb(y, sr);
+  log.outputPeak = peakDb(y);
+  return { audio: y, log: log };
+}
+
+/* ---------- WAV ---------- */
+function toWav(channels, sr) {
+  var n = channels[0].length, ch = channels.length, bytes = n * ch * 2;
+  var buf = new ArrayBuffer(44 + bytes), v = new DataView(buf);
+  function str(off, s) { for (var i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i)); }
+  str(0, "RIFF"); v.setUint32(4, 36 + bytes, true); str(8, "WAVEfmt ");
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, ch, true);
+  v.setUint32(24, sr, true); v.setUint32(28, sr * ch * 2, true);
+  v.setUint16(32, ch * 2, true); v.setUint16(34, 16, true);
+  str(36, "data"); v.setUint32(40, bytes, true);
+  var off = 44;
+  for (var i = 0; i < n; i++) {
+    for (var c = 0; c < ch; c++) {
+      var s = Math.max(-1, Math.min(1, channels[c][i]));
+      v.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true); off += 2;
+    }
+  }
+  return new Blob([buf], { type: "audio/wav" });
+}
+
+global.VL = {
+  highpass: highpass, peaking: peaking, highShelf: highShelf,
+  rmsDb: rmsDb, noiseFloorDb: noiseFloorDb, lufs: lufs, peakDb: peakDb,
+  bandProfile: bandProfile, BANDS: BANDS,
+  expander: expander, compressor: compressor, deesser: deesser, limiter: limiter, gain: gain,
+  analyseSections: analyseSections, matchSections: matchSections,
+  enhance: enhance, toWav: toWav
+};
+})(typeof window !== "undefined" ? window : globalThis);
+
+</script>
+<script>
+var F=document.getElementById("file"),DROP=document.getElementById("drop");
+var S={buf:null,name:"",before:null,after:null,sr:0};
+function $(id){return document.getElementById(id)}
+function status(t){$("status").textContent=t}
+function prog(p){$("barfill").style.width=Math.round(p*100)+"%"}
+function cls(v,good,mid){return v<=good?"ok":v<=mid?"mid":"bad"}
+
+DROP.onclick=function(){F.click()};
+DROP.ondragover=function(e){e.preventDefault();DROP.classList.add("over")};
+DROP.ondragleave=function(){DROP.classList.remove("over")};
+DROP.ondrop=function(e){e.preventDefault();DROP.classList.remove("over");if(e.dataTransfer.files[0])load(e.dataTransfer.files[0])};
+F.onchange=function(){if(F.files[0])load(F.files[0])};
+$("str").oninput=function(){$("strv").textContent=(+this.value).toFixed(2)};
+$("sec").oninput=function(){$("secv").textContent=this.value+"s"};
+$("lufs").onchange=function(){$("lufsv").textContent=this.value+" LUFS"};
+$("reset").onclick=function(){location.reload()};
+
+function load(file){
+  S.name=file.name;
+  status("Reading "+file.name+" …");
+  var fr=new FileReader();
+  fr.onload=function(){
+    var ac=new (window.AudioContext||window.webkitAudioContext)();
+    ac.decodeAudioData(fr.result,function(buf){
+      S.buf=buf;S.sr=buf.sampleRate;
+      $("fname").textContent=file.name+" — "+fmt(buf.duration)+", "+buf.numberOfChannels+" ch, "+buf.sampleRate+" Hz";
+      $("work").classList.remove("hide");DROP.classList.add("hide");
+      status("Ready. "+fmt(buf.duration)+" of audio — there is no length cap here.");
+      window.__loaded=true;
+    },function(){status("This browser could not decode "+file.name+". Your browser does the decoding here, so support varies — WAV and MP3 work everywhere. Drop another file to try again.");window.__error="decode"});
+  };
+  fr.readAsArrayBuffer(file);
+}
+function fmt(s){var m=Math.floor(s/60),x=Math.round(s%60);return m+"m "+(x<10?"0":"")+x+"s"}
+function mono(buf){
+  if(buf.numberOfChannels===1)return buf.getChannelData(0).slice();
+  var a=buf.getChannelData(0),b=buf.getChannelData(1),o=new Float32Array(a.length);
+  for(var i=0;i<a.length;i++)o[i]=(a[i]+b[i])/2;
+  return o;
+}
+function wavURL(x,sr){return URL.createObjectURL(VL.toWav([x],sr))}
+
+$("go").onclick=function(){
+  if(!S.buf)return;
+  $("go").disabled=true;prog(0.05);status("Measuring every section …");
+  setTimeout(function(){
+    var x=mono(S.buf),sr=S.sr;
+    var secLen=+$("sec").value;
+    var before=VL.analyseSections(x,sr,secLen);
+    prog(0.2);status("Cleaning up and matching sections — this runs on your machine, so it takes a moment.");
+    setTimeout(function(){
+      var t0=Date.now();
+      var r=VL.enhance(x,sr,{strength:+$("str").value,targetLufs:+$("lufs").value,
+        sectionSec:secLen,iterations:5,matchSections:$("match").value==="1"});
+      var after=VL.analyseSections(r.audio,sr,secLen);
+      prog(1);
+      var secs=((Date.now()-t0)/1000).toFixed(1);
+      status("Done in "+secs+"s. "+before.length+" sections processed.");
+      render(before,after,r.log);
+      S.before=x;S.after=r.audio;
+      $("a0").src=wavURL(x,sr);$("a1").src=wavURL(r.audio,sr);
+      $("results").classList.remove("hide");$("listen").classList.remove("hide");
+      $("go").disabled=false;
+      var fin=true;for(var q=0;q<r.audio.length;q++){if(!isFinite(r.audio[q])){fin=false;break}}
+      window.__audioFinite=fin;
+      window.__result={log:r.log,before:before,after:after};
+      window.__done=true;
+    },60);
+  },60);
+};
+
+function spread(a){return Math.max.apply(null,a)-Math.min.apply(null,a)}
+function render(b,a,log){
+  var lb=spread(b.map(function(s){return s.lufs})),la=spread(a.map(function(s){return s.lufs}));
+  var fb=spread(b.map(function(s){return s.floor})),fa=spread(a.map(function(s){return s.floor}));
+  function band(arr){var m=0;for(var i=0;i<7;i++){var v=arr.map(function(s){return s.bands[i]});m=Math.max(m,spread(v))}return m}
+  var tb=band(b),ta=band(a);
+  $("verdict").innerHTML=
+    item("Loudness drift between sections",lb,la,"LU",1.0,2.5)+
+    item("Background noise drift",fb,fa,"dB",6,12)+
+    item("Tone drift (mic character)",tb,ta,"dB",2.5,5);
+  var tb2=$("tbl").querySelector("tbody");tb2.innerHTML="";
+  b.forEach(function(s,i){
+    var tr=document.createElement("tr");
+    tr.innerHTML="<td>"+(i+1)+"</td><td>"+s.lufs.toFixed(1)+"</td><td class='ok'>"+a[i].lufs.toFixed(1)+
+      "</td><td>"+s.floor.toFixed(1)+"</td><td class='ok'>"+a[i].floor.toFixed(1)+"</td>";
+    tb2.appendChild(tr);
+  });
+  $("explain").textContent="Loudness is measured the way broadcasters measure it (LUFS). "+
+    "Background is the quietest tenth of a second in each section — the sound of the room between words. "+
+    "Tone drift is how much the frequency balance changes from section to section, which is what makes one file sound like several different microphones.";
+}
+function item(label,b,a,unit,good,mid){
+  return "<div class='vi'><div class='vl'>"+label+"</div><div class='vv'>"+
+    "<span class='"+cls(b,good,mid)+"'>"+b.toFixed(1)+"</span> <span class='arrow'>&rarr;</span> "+
+    "<span class='"+cls(a,good,mid)+"'>"+a.toFixed(1)+"</span> <span style='font-size:14px;color:var(--dim)'>"+unit+"</span></div></div>";
+}
+$("dl").onclick=function(){
+  if(!S.after)return;
+  var a=document.createElement("a");
+  a.href=wavURL(S.after,S.sr);
+  a.download=S.name.replace(/\.[^.]+$/,"")+"_levelled.wav";
+  document.body.appendChild(a);a.click();a.remove();
+};
+</script></body></html>
