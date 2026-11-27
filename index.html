@@ -933,24 +933,33 @@ function mono(buf){
 function wavURL(x,sr){return URL.createObjectURL(VL.toWav([x],sr))}
 
 /* The sample recording: 90 s of synthetic "narration" in three takes that do
-   not match — different level, room noise and mic tone. Generated here, so the
+   not match — the middle take is quieter and brighter, as if recorded another day —
+   each with the faint hiss of a quiet room. Generated here, so the
    sample needs no download. Seeded, so it is the same every time. */
 function makeSample(){
   var sr=44100,secs=90,n=sr*secs,x=new Float32Array(n),seed=20260002;
   var rnd=function(){return (seed=(seed*1664525+1013904223)>>>0)/4294967296};
-  var takes=[{g:0.22,noise:0.004,bright:0.15,f0:118},{g:0.07,noise:0.007,bright:0.4,f0:126},{g:0.14,noise:0.005,bright:-0.1,f0:121}];
-  var lp=0,hp=0,ph=0;
+  var takes=[{g:0.21,tilt:1.0,f0:118},{g:0.09,tilt:0.85,f0:124},{g:0.17,tilt:1.0,f0:120}];
+  var ph=0,lp=0,hp=0,cn=0;
   for(var i=0;i<n;i++){
     var t=i/sr,k=Math.min(2,Math.floor(t/30)),T=takes[k];
-    var syl=Math.max(0,Math.sin(2*Math.PI*3.7*t+Math.sin(2*Math.PI*0.31*t)*2));
-    var phrase=(Math.floor(t/2.6)%5===4)?0:1;            // a breath pause every few seconds
-    var env=Math.pow(syl,1.5)*phrase;
+    var sp=Math.sin(2*Math.PI*3.6*t+Math.sin(2*Math.PI*0.3*t)*2);
+    var phrase=(Math.floor(t/3)%5===4)?0:1;               // a breath pause every 15 s cycle
+    var env=Math.pow(Math.max(0,sp),1.5)*phrase;
     var f=T.f0*(1+0.08*Math.sin(2*Math.PI*0.9*t));
     ph+=2*Math.PI*f/sr;
-    var v=0;for(var h=1;h<=14;h++){v+=Math.sin(ph*h)/(h*(1-T.bright*0.06*h>0.2?1-T.bright*0.06*h:0.2))}
-    v*=env*T.g*0.35;
-    var nz=(rnd()*2-1);lp=lp*0.92+nz*0.08;hp=nz-hp*0.5;
-    v+=(lp*0.8+hp*0.2)*T.noise*3;
+    // voiced sound: harmonics shaped by three formants; the takes differ in
+    // low/mid "mic character" below 2.5 kHz
+    var v=0,hk=Math.max(1,2500/f);
+    for(var h=1;h<=48;h++){if(f*h>9000)break;
+      var fo=1+0.9*Math.exp(-Math.pow((f*h-650)/260,2))+0.6*Math.exp(-Math.pow((f*h-1800)/500,2))+0.35*Math.exp(-Math.pow((f*h-2900)/700,2));
+      v+=fo*Math.sin(ph*h)/(h<=hk?Math.pow(h,T.tilt):Math.pow(hk,T.tilt)*(h/hk));}
+    var nz=rnd()*2-1;
+    var on=(sp>0&&sp<0.35&&phrase)?Math.sin(sp/0.35*Math.PI):0;   // consonant at each syllable start
+    cn=nz-cn*0.6;
+    v=(v*env*0.3+cn*on*0.10)*T.g;
+    lp=lp*0.92+nz*0.08;hp=nz-hp*0.5;
+    v+=(lp*0.8+hp*0.2)*T.g*0.00018;                       // the room's faint hiss
     x[i]=v;
   }
   var mx=0;for(i=0;i<n;i++){var a=Math.abs(x[i]);if(a>mx)mx=a}
